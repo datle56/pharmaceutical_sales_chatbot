@@ -1,7 +1,6 @@
 import json
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
-from utils.embedding import get_embeddings
 from dotenv import load_dotenv
 import os
 

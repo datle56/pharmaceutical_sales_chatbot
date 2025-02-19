@@ -79,15 +79,12 @@
     const sendButton = document.getElementById("send-button");
     const loadingIndicator = document.getElementById("loading");
 
-    // Back-end URL (thay thế theo IP/port của bạn)
-    const BASE_URL = "http://localhost:8000"; 
-    const INIT_URL = `${BASE_URL}/init-session`; 
-    const CHAT_URL = `${BASE_URL}/chat`; 
+    const BASE_URL = "http://localhost:8000";
+    const INIT_URL = `${BASE_URL}/init-session`;
+    const CHAT_URL = `${BASE_URL}/chat`;
 
-    // Biến lưu session ID
-    let currentSessionId = null;
+    let currentSessionId = localStorage.getItem('chatSessionId');
 
-    // Hiển thị chat message
     function appendMessage(content, isUser = true) {
       const msgDiv = document.createElement("div");
       msgDiv.classList.add("message", isUser ? "user" : "bot");
@@ -98,57 +95,73 @@
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
-    // Cập nhật session ID hiển thị
     function setSessionIdOnUI(id) {
+      console.log("Setting session ID on UI:", id);
+      if (id) {
+        localStorage.setItem('chatSessionId', id);
+        currentSessionId = id;
+      } else {
+        localStorage.removeItem('chatSessionId');
+        currentSessionId = null;
+      }
       sessionInfo.textContent = `Session ID: ${id || "Not connected"}`;
     }
 
-    // Hàm khởi tạo session (gọi init-session)
     async function initSession() {
       try {
         const res = await fetch(INIT_URL, {
           method: "GET",
-          credentials: "include" // để browser gửi cookie (nếu có) và nhận cookie (nếu server set)
+          headers: {
+            "Accept": "application/json",
+          }
         });
+
         if (!res.ok) {
           throw new Error("Cannot init session");
         }
+
         const data = await res.json();
-        // Server trả về {session_id, detail}
-        currentSessionId = data.session_id; // Lưu lại session ID
-        setSessionIdOnUI(currentSessionId);
+        console.log("Received session data:", data);
+
+        if (data.status === "success" && data.session_id) {
+          setSessionIdOnUI(data.session_id);
+        } else {
+          throw new Error(data.detail || "Failed to initialize session");
+        }
       } catch (error) {
         console.error("Init session error:", error);
         setSessionIdOnUI(null);
       }
     }
 
-    // Hàm gửi tin nhắn
     async function sendMessage() {
+      if (!currentSessionId) {
+        appendMessage("Error: No active session. Trying to reconnect...", false);
+        await initSession();
+        if (!currentSessionId) {
+          appendMessage("Error: Could not establish session. Please refresh the page.", false);
+          return;
+        }
+      }
+
       const userMessage = userInput.value.trim();
       if (!userMessage) return;
 
-      // Tắt input & hiển thị loading
       userInput.disabled = true;
       sendButton.disabled = true;
       loadingIndicator.style.display = "block";
 
-      // Hiển thị tin nhắn người dùng
       appendMessage(userMessage, true);
       userInput.value = "";
 
       try {
-        // Tạo URL kèm session_id (nếu server muốn nhận session_id qua query)
-        // => /chat?session_id=abc123
-        // Còn phần query (nội dung chat) ta gửi trong body (POST).
         const urlWithSession = `${CHAT_URL}?session_id=${encodeURIComponent(currentSessionId)}`;
 
-        // Gọi POST, gửi query dưới dạng JSON body
         const res = await fetch(urlWithSession, {
           method: "POST",
-          credentials: "include",
           headers: {
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Accept": "application/json"
           },
           body: JSON.stringify({
             query: userMessage
@@ -160,17 +173,21 @@
         }
 
         const data = await res.json();
-        // data = { session_id, response }
-        appendMessage(data.response, false);
-
-        // Nếu server có thể trả về session_id mới
-        if (data.session_id) {
-          currentSessionId = data.session_id;
-          setSessionIdOnUI(currentSessionId);
+        
+        if (data.response.status === "error") {
+          throw new Error(data.response.message);
         }
+
+        appendMessage(data.response.answer, false);
+
       } catch (error) {
         console.error("Error in sendMessage:", error);
         appendMessage("Error: " + error.message, false);
+        
+        if (error.message.includes("Invalid or expired session")) {
+          setSessionIdOnUI(null);
+          await initSession();
+        }
       } finally {
         userInput.disabled = false;
         sendButton.disabled = false;
@@ -179,10 +196,8 @@
       }
     }
 
-    // Khi bấm nút Send
     sendButton.addEventListener("click", sendMessage);
 
-    // Khi nhấn Enter
     userInput.addEventListener("keypress", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
@@ -190,7 +205,6 @@
       }
     });
 
-    // Khi load trang => init session
     window.addEventListener("load", initSession);
   </script>
 </body>

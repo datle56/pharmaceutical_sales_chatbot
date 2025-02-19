@@ -1,5 +1,8 @@
+import logging
 import numpy as np
-from utils.embedding import get_embeddings
+from app.utils.embedding import get_embeddings
+
+logger = logging.getLogger(__name__)
 
 def cosine_similarity(vector1, vector2):
     # Compute cosine similarity between two vectors
@@ -8,7 +11,8 @@ def cosine_similarity(vector1, vector2):
     norm2 = np.linalg.norm(vector2)
     return dot_product / (norm1 * norm2)
 
-def find_similar_products_manual(user_query, products, top_k=5):
+def find_similar_products_manual(user_query, products, top_k=1):
+    logger.info("Finding similar products...")
     embeddings = get_embeddings()
     # Tạo vector cho truy vấn người dùng
     query_vector = embeddings.embed_query(user_query)
@@ -31,6 +35,8 @@ def find_similar_products_manual(user_query, products, top_k=5):
 
     # Lấy top_k
     top_products = [item[0] for item in similarities[:top_k]]
+
+    logger.info(f"Top similar products: {top_products}")
 
     # Trả về list _id và danh sách product
     return [product["_id"] for product in top_products], top_products

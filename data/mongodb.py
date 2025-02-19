@@ -16,7 +16,7 @@ client = MongoClient(uri, server_api=ServerApi('1'))
 db = client["chatbot"] 
 collection = db["products"]  
 embeddings = get_embeddings()
-folder_path = "./data/product"  
+folder_path = "./product"  
 
 
 # Send a ping to confirm a successful connection
